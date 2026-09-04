@@ -4,20 +4,75 @@
   const WD_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
   const STORAGE_LAST_COND = "shiftapp:lastConditions";
   const STORAGE_RECORDS = "shiftapp:records";
+  const STORAGE_THEME = "shiftapp:theme";
+  const STORAGE_ACCENT = "shiftapp:accent";
+  const STORAGE_PROFILES = "shiftapp:profiles";
+
+  const APP_VERSION = "1.2.0";
+
+  const ACCENTS = [
+    { key: "teal", label: "ティール", swatch: "#3E7C74" },
+    { key: "indigo", label: "インディゴ", swatch: "#4552C4" },
+    { key: "amber", label: "アンバー", swatch: "#96661E" },
+    { key: "plum", label: "プラム", swatch: "#7A3F5C" },
+    { key: "forest", label: "フォレスト", swatch: "#3F6B42" },
+  ];
+
+  // 更新履歴。機能追加・修正のたびに先頭へ追記する。
+  const CHANGELOG = [
+    {
+      version: "1.2.0",
+      date: "2026-09-04",
+      notes: [
+        "「まとめる目安」設定を追加。短い出勤が飛び石で続くのを避け、まとまった連勤にしやすくしました",
+        "休み・出勤日を指定するカレンダーを1つに統合し、フォームをすっきりさせました",
+        "詳細な設定(固定休・確定済み期間)を折りたたみ表示にしました",
+        "履歴画面に何も保存されていない時に操作できなくなる不具合を修正",
+        "プロフィール機能を追加(条件をまとめて保存・呼び出し)",
+        "テーマ(ライト・ダーク・自動)とアクセントカラーの切り替えを追加",
+        "設定タブを新設し、テーマ・プロフィール・バージョン情報をまとめました",
+      ],
+    },
+    {
+      version: "1.1.1",
+      date: "2026-09-04",
+      notes: [
+        "「シフト確定済みの最終日」を設定できるようにし、クール制のバイト先にも対応",
+      ],
+    },
+    {
+      version: "1.1.0",
+      date: "2026-09-04",
+      notes: [
+        "今日より前の日を、明示的に選ばない限り自動的に休み扱いにするよう修正",
+        "「すでに出勤した日」を指定できるカレンダーを追加",
+        "最低出勤日数などの絶対条件を任意項目に変更(未入力なら制限なし)",
+      ],
+    },
+    {
+      version: "1.0.0",
+      date: "2026-09-03",
+      notes: ["初回リリース"],
+    },
+  ];
 
   // ---- 状態 ---------------------------------------------------------------
 
   const state = {
-    cond: null,           // 生成に使った条件(Setを含む生の形)
-    days: null,           // Scheduler.buildDays の結果
-    result: null,         // Scheduler.generateSchedules の結果
-    altIndex: 0,          // 現在選ばれている候補のインデックス
-    schedule: null,       // 現在表示中の(手動編集込みの)スケジュール配列
+    cond: null,
+    days: null,
+    result: null,
+    altIndex: 0,
+    schedule: null,
     formAbsoluteOff: new Set(),
     formAbsoluteWork: new Set(),
     formFixedOff: new Set(),
     formPreferredOff: new Set(),
     sheetIndex: null,
+    pickMode: "off", // "off" | "work" — 統合カレンダーのタップ時の動作切り替え
+    currentView: "form",
+    viewBeforeOverlay: "form", // 履歴/設定を開く前に見ていたビュー
+    pendingDeleteProfileId: null,
   };
 
   // ---- ユーティリティ -------------------------------------------------------
@@ -25,7 +80,11 @@
   function $(id) { return document.getElementById(id); }
 
   function showView(name) {
-    ["form", "generating", "result", "history"].forEach((v) => {
+    if (name !== "history" && name !== "settings") {
+      state.viewBeforeOverlay = name;
+    }
+    state.currentView = name;
+    ["form", "generating", "result", "history", "settings"].forEach((v) => {
       $(`view-${v}`).hidden = v !== name;
     });
   }
@@ -65,13 +124,11 @@
 
   function renderWeekdayChips() {
     buildWeekdayChips($("fixedOffWeekdays"), state.formFixedOff, () => {
-      // 固定休にした曜日は「できれば休み」からは自動的に外す(重複防止)
       state.formFixedOff.forEach((wd) => state.formPreferredOff.delete(wd));
       renderWeekdayChips();
     });
     buildWeekdayChips($("preferredOffWeekdays"), state.formPreferredOff, renderWeekdayChips);
 
-    // 固定休の曜日は「できれば休み」チップを無効化する
     const prefContainer = $("preferredOffWeekdays");
     Array.from(prefContainer.children).forEach((btn) => {
       const wd = Number(btn.dataset.wd);
@@ -85,7 +142,7 @@
     });
   }
 
-  // ---- 「絶対に休む日」入力用ミニカレンダー -----------------------------------
+  // ---- 休み・出勤日 指定カレンダー(1つに統合) -------------------------------
 
   function getFormYearMonth() {
     const v = $("inputMonth").value; // "YYYY-MM"
@@ -94,8 +151,19 @@
     return { year: y, month: m };
   }
 
-  function renderPickCalendar(containerId, selectedSet, otherSet) {
-    const container = $(containerId);
+  function setPickMode(mode) {
+    state.pickMode = mode;
+    const switchEl = $("pickModeSwitch");
+    Array.from(switchEl.children).forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.mode === mode);
+    });
+    $("pickModeHint").textContent = mode === "off"
+      ? "カレンダーの日付をタップすると「絶対に休みたい日」として選ばれます。"
+      : "カレンダーの日付をタップすると「すでに出勤した日」として選ばれます。";
+  }
+
+  function renderPickCalendar() {
+    const container = $("pickCalendar");
     container.innerHTML = "";
     const ym = getFormYearMonth();
     if (!ym) return;
@@ -120,29 +188,27 @@
       const cell = document.createElement("button");
       cell.type = "button";
       cell.className = "cal-cell";
-      if (containerId === "absoluteWorkCalendar") cell.classList.add("cal-cell--work-pick");
+      if (state.formAbsoluteOff.has(d)) cell.classList.add("is-pick-off");
+      if (state.formAbsoluteWork.has(d)) cell.classList.add("is-pick-work");
       cell.textContent = String(d);
-      if (selectedSet.has(d)) cell.classList.add("is-selected");
       cell.addEventListener("click", () => {
-        if (selectedSet.has(d)) {
-          selectedSet.delete(d);
+        if (state.pickMode === "off") {
+          if (state.formAbsoluteOff.has(d)) state.formAbsoluteOff.delete(d);
+          else {
+            state.formAbsoluteOff.add(d);
+            state.formAbsoluteWork.delete(d);
+          }
         } else {
-          selectedSet.add(d);
-          if (otherSet) otherSet.delete(d); // 「休み」と「出勤済み」は同じ日に両立しない
+          if (state.formAbsoluteWork.has(d)) state.formAbsoluteWork.delete(d);
+          else {
+            state.formAbsoluteWork.add(d);
+            state.formAbsoluteOff.delete(d);
+          }
         }
-        renderAbsoluteOffCalendar();
-        renderAbsoluteWorkCalendar();
+        renderPickCalendar();
       });
       container.appendChild(cell);
     }
-  }
-
-  function renderAbsoluteOffCalendar() {
-    renderPickCalendar("absoluteOffCalendar", state.formAbsoluteOff, state.formAbsoluteWork);
-  }
-
-  function renderAbsoluteWorkCalendar() {
-    renderPickCalendar("absoluteWorkCalendar", state.formAbsoluteWork, state.formAbsoluteOff);
   }
 
   // ---- フォーム -> 条件オブジェクト --------------------------------------------
@@ -155,15 +221,16 @@
     const targetSalary = targetSalaryRaw ? Number(targetSalaryRaw) : null;
     const wantRenkyu = $("inputRenkyu").getAttribute("aria-checked") === "true";
 
-    // 日数の上限系は空欄OK(任意)。空欄なら「制限なし」として扱う。
     const daysInMonth = ym ? Scheduler.daysInMonth(ym.year, ym.month) : 31;
     const minRaw = $("inputMinDays").value;
     const maxRaw = $("inputMaxDays").value;
     const maxConsecutiveRaw = $("inputMaxConsecutive").value;
+    const minWorkBlockRaw = $("inputMinWorkBlock").value;
 
     const minWorkDays = minRaw ? Number(minRaw) : 0;
     const maxWorkDays = maxRaw ? Number(maxRaw) : daysInMonth;
     const maxConsecutiveWorkDays = maxConsecutiveRaw ? Number(maxConsecutiveRaw) : daysInMonth;
+    const minWorkBlock = minWorkBlockRaw ? Number(minWorkBlockRaw) : null;
 
     const confirmedThroughRaw = $("inputConfirmedThroughDay").value;
     const confirmedThroughDate = (confirmedThroughRaw && ym)
@@ -179,6 +246,7 @@
       minWorkDays,
       maxWorkDays,
       maxConsecutiveWorkDays,
+      minWorkBlock,
       confirmedThroughDate,
       absoluteOffDates: new Set(state.formAbsoluteOff),
       absoluteWorkDates: new Set(state.formAbsoluteWork),
@@ -196,6 +264,9 @@
     if (cond.maxWorkDays < 0) return "上限日数は0以上で入力してください。";
     if (cond.minWorkDays > cond.maxWorkDays) return "最低出勤日数が上限日数を超えています。";
     if (cond.maxConsecutiveWorkDays < 1) return "最大連勤日数は1以上で入力してください。";
+    if (cond.minWorkBlock && cond.minWorkBlock > cond.maxConsecutiveWorkDays) {
+      return "「まとめる目安」の日数が最大連勤日数を超えています。";
+    }
     return null;
   }
 
@@ -203,9 +274,10 @@
     $("inputMonth").value = `${cond.year}-${String(cond.month).padStart(2, "0")}`;
     $("inputWage").value = cond.hourlyWage;
     $("inputHours").value = cond.hoursPerDay;
-    $("inputMinDays").value = cond.minWorkDays;
-    $("inputMaxDays").value = cond.maxWorkDays;
-    $("inputMaxConsecutive").value = cond.maxConsecutiveWorkDays;
+    $("inputMinDays").value = cond.minWorkDays || "";
+    $("inputMaxDays").value = cond.maxWorkDays || "";
+    $("inputMaxConsecutive").value = cond.maxConsecutiveWorkDays || "";
+    $("inputMinWorkBlock").value = cond.minWorkBlock || "";
     $("inputTargetSalary").value = cond.targetSalary || "";
     $("inputConfirmedThroughDay").value = cond.confirmedThroughDate ? cond.confirmedThroughDate.day : "";
     $("inputRenkyu").setAttribute("aria-checked", cond.wantRenkyu ? "true" : "false");
@@ -215,8 +287,7 @@
     state.formFixedOff = new Set(cond.fixedOffWeekdays);
     state.formPreferredOff = new Set(cond.preferredOffWeekdays);
     renderWeekdayChips();
-    renderAbsoluteOffCalendar();
-    renderAbsoluteWorkCalendar();
+    renderPickCalendar();
   }
 
   // ---- 生成 ------------------------------------------------------------
@@ -230,7 +301,6 @@
 
   function runGeneration(cond, seed) {
     showView("generating");
-    // スピナーを描画してから重い処理を行う
     setTimeout(() => {
       const result = Scheduler.generateSchedules(cond, { seed });
       if (!result.feasible) {
@@ -458,8 +528,6 @@
         state.cond = condFromStorable(rec.cond);
         state.days = rec.days;
         state.schedule = rec.schedule.slice();
-        // 履歴から開いた場合は候補生成をやり直さないので、
-        // 「別のパターン」は現在のものだけを表示する
         state.result = {
           alternatives: [{
             schedule: state.schedule,
@@ -476,6 +544,142 @@
     });
   }
 
+  // ---- テーマ / アクセントカラー ---------------------------------------------
+
+  function applyTheme(mode) {
+    let resolved = mode;
+    if (mode === "auto") {
+      resolved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.dataset.themeMode = mode;
+    localStorage.setItem(STORAGE_THEME, mode);
+    renderThemeSwitch();
+  }
+
+  function renderThemeSwitch() {
+    const mode = document.documentElement.dataset.themeMode || "auto";
+    Array.from($("themeSwitch").children).forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.themeMode === mode);
+    });
+  }
+
+  function applyAccent(key) {
+    document.documentElement.dataset.accent = key;
+    localStorage.setItem(STORAGE_ACCENT, key);
+    renderAccentDots();
+  }
+
+  function renderAccentDots() {
+    const current = document.documentElement.dataset.accent || "teal";
+    const container = $("accentDots");
+    container.innerHTML = "";
+    ACCENTS.forEach((a) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "accent-dot" + (a.key === current ? " is-active" : "");
+      btn.style.background = a.swatch;
+      btn.setAttribute("aria-label", a.label);
+      btn.title = a.label;
+      btn.addEventListener("click", () => applyAccent(a.key));
+      container.appendChild(btn);
+    });
+  }
+
+  // ---- プロフィール -------------------------------------------------------
+
+  function loadProfiles() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_PROFILES) || "[]");
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveProfiles(list) {
+    localStorage.setItem(STORAGE_PROFILES, JSON.stringify(list));
+  }
+
+  function renderProfileList() {
+    const profiles = loadProfiles();
+    const list = $("profileList");
+    list.innerHTML = "";
+    $("profileEmpty").hidden = profiles.length > 0;
+
+    profiles.forEach((p) => {
+      const item = document.createElement("div");
+      item.className = "history-item";
+      item.innerHTML = `
+        <div>
+          <div class="history-item-month">${p.name}</div>
+          <div class="history-item-info">時給${p.cond.hourlyWage}円 ・ 1日${p.cond.hoursPerDay}時間</div>
+        </div>
+        <div class="history-item-actions">
+          <button type="button" class="icon-btn-sm" data-action="delete" aria-label="削除">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      `;
+      item.addEventListener("click", (e) => {
+        if (e.target.closest('[data-action="delete"]')) {
+          e.stopPropagation();
+          state.pendingDeleteProfileId = p.id;
+          $("confirmTitle").textContent = `「${p.name}」を削除しますか？`;
+          $("confirmSheet").hidden = false;
+          return;
+        }
+        prefillForm(condFromStorable(p.cond));
+        showView("form");
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function saveCurrentAsProfile() {
+    const nameInput = $("profileNameInput");
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.focus();
+      return;
+    }
+    const cond = readConditionsFromForm();
+    const profiles = loadProfiles();
+    profiles.unshift({
+      id: `${Date.now()}`,
+      name,
+      cond: condToStorable(cond),
+      savedAt: new Date().toISOString(),
+    });
+    saveProfiles(profiles);
+    nameInput.value = "";
+    renderProfileList();
+  }
+
+  function deleteProfile(id) {
+    const profiles = loadProfiles().filter((p) => p.id !== id);
+    saveProfiles(profiles);
+    renderProfileList();
+  }
+
+  // ---- 設定ビュー ---------------------------------------------------------
+
+  function renderSettings() {
+    renderThemeSwitch();
+    renderAccentDots();
+    renderProfileList();
+
+    $("versionCurrent").textContent = APP_VERSION;
+    const changelogList = $("changelogList");
+    changelogList.innerHTML = CHANGELOG.map((entry) => `
+      <div class="changelog-entry">
+        <span class="changelog-version">v${entry.version}</span>
+        <span class="changelog-date">${entry.date}</span>
+        <ul>${entry.notes.map((n) => `<li>${n}</li>`).join("")}</ul>
+      </div>
+    `).join("");
+  }
+
   // ---- 初期化 -----------------------------------------------------------
 
   function defaultMonthValue() {
@@ -487,14 +691,18 @@
   function init() {
     $("inputMonth").value = defaultMonthValue();
     renderWeekdayChips();
-    renderAbsoluteOffCalendar();
-    renderAbsoluteWorkCalendar();
+    renderPickCalendar();
+    setPickMode("off");
 
     $("inputMonth").addEventListener("change", () => {
       state.formAbsoluteOff = new Set();
       state.formAbsoluteWork = new Set();
-      renderAbsoluteOffCalendar();
-      renderAbsoluteWorkCalendar();
+      renderPickCalendar();
+    });
+
+    $("pickModeSwitch").addEventListener("click", (e) => {
+      const btn = e.target.closest(".segmented-btn");
+      if (btn) setPickMode(btn.dataset.mode);
     });
 
     $("inputRenkyu").addEventListener("click", (e) => {
@@ -529,6 +737,47 @@
       showView("history");
     });
 
+    $("btnSettings").addEventListener("click", () => {
+      renderSettings();
+      showView("settings");
+    });
+
+    document.querySelectorAll(".back-link").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        showView(state.viewBeforeOverlay || "form");
+      });
+    });
+
+    $("themeSwitch").addEventListener("click", (e) => {
+      const btn = e.target.closest(".segmented-btn");
+      if (btn) applyTheme(btn.dataset.themeMode);
+    });
+
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (document.documentElement.dataset.themeMode === "auto") {
+          applyTheme("auto");
+        }
+      });
+    }
+
+    $("btnSaveProfile").addEventListener("click", saveCurrentAsProfile);
+    $("confirmOkBtn").addEventListener("click", () => {
+      if (state.pendingDeleteProfileId) deleteProfile(state.pendingDeleteProfileId);
+      state.pendingDeleteProfileId = null;
+      $("confirmSheet").hidden = true;
+    });
+    $("confirmCancelBtn").addEventListener("click", () => {
+      state.pendingDeleteProfileId = null;
+      $("confirmSheet").hidden = true;
+    });
+    $("confirmSheet").addEventListener("click", (e) => {
+      if (e.target.id === "confirmSheet") {
+        state.pendingDeleteProfileId = null;
+        $("confirmSheet").hidden = true;
+      }
+    });
+
     $("sheetCloseBtn").addEventListener("click", closeDaySheet);
     $("sheetToggleBtn").addEventListener("click", toggleSheetDay);
     $("daySheet").addEventListener("click", (e) => {
@@ -548,7 +797,6 @@
 
     showView("form");
 
-    // Service Worker登録(オフライン対応)
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
