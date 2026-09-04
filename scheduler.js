@@ -25,9 +25,11 @@ function buildDays(cond) {
   const days = [];
   for (let d = 1; d <= n; d++) {
     const wd = weekdayOf(cond.year, cond.month, d);
+    const forcedWork = cond.absoluteWorkDates && cond.absoluteWorkDates.has(d);
     const forcedOff =
-      cond.absoluteOffDates.has(d) || cond.fixedOffWeekdays.has(wd);
-    days.push({ day: d, weekday: wd, forcedOff });
+      !forcedWork &&
+      (cond.absoluteOffDates.has(d) || cond.fixedOffWeekdays.has(wd));
+    days.push({ day: d, weekday: wd, forcedOff, forcedWork: !!forcedWork });
   }
   return days;
 }
@@ -40,12 +42,28 @@ function checkFeasibility(cond) {
   }
   const days = buildDays(cond);
   const forcedOffCount = days.filter((d) => d.forcedOff).length;
+  const forcedWorkCount = days.filter((d) => d.forcedWork).length;
   const available = days.length - forcedOffCount;
 
   if (available < cond.minWorkDays) {
     return {
       feasible: false,
       reason: `固定休・絶対休みの日が多く、出勤可能な日が${available}日しかありません。最低出勤日数(${cond.minWorkDays}日)を満たせません。固定休を減らすか、最低出勤日数を下げてください。`,
+    };
+  }
+
+  if (forcedWorkCount > cond.maxWorkDays) {
+    return {
+      feasible: false,
+      reason: `すでに出勤した日として選んだ日数(${forcedWorkCount}日)が、上限日数(${cond.maxWorkDays}日)を超えています。上限日数を増やしてください。`,
+    };
+  }
+
+  const forcedWorkRun = maxForcedWorkRun(days);
+  if (forcedWorkRun > cond.maxConsecutiveWorkDays) {
+    return {
+      feasible: false,
+      reason: `すでに出勤した日として選んだ日が${forcedWorkRun}日連続しており、最大連勤日数(${cond.maxConsecutiveWorkDays}日)を超えています。最大連勤日数を増やしてください。`,
     };
   }
 
@@ -62,8 +80,28 @@ function checkFeasibility(cond) {
   return { feasible: true };
 }
 
-function estimateMaxByConsecutive(days, maxConsecutive) {
-  // forcedOffで区切られた各区間で、maxConsecutiveおきに1日休みを挟むと
+function maxForcedWorkRun(days) {
+  // forcedWorkの日が、間に一切「休みになりうる余地」を挟まず
+  // (=隣の日もforcedWork)何日連続しているかの最大値。
+  // これは「ユーザーの選択だけで、アルゴリズムの選択の余地なく確定してしまう
+  // 連勤日数」なので、これがmaxConsecutiveWorkDaysを超えていたら、
+  // どう頑張っても連勤上限を守れないということになる。
+  // (forcedWorkでない日は、アルゴリズムが「休み」を選べる余地が残っているため、
+  //  そこで連勤の鎖は途切れる可能性がある扱いにする)
+  let best = 0;
+  let cur = 0;
+  for (const d of days) {
+    if (d.forcedWork) {
+      cur++;
+      best = Math.max(best, cur);
+    } else {
+      cur = 0;
+    }
+  }
+  return best;
+}
+
+function estimateMaxByConsecutive(days, maxConsecutive) {  // forcedOffで区切られた各区間で、maxConsecutiveおきに1日休みを挟むと
   // 仮定した場合に働ける最大日数の概算。
   let total = 0;
   let runLen = 0;
@@ -108,6 +146,12 @@ function generateCandidate(cond, days, targetDays, rng) {
     const day = days[i];
     if (day.forcedOff) {
       consecutive = 0;
+      continue;
+    }
+    if (day.forcedWork) {
+      schedule[i] = true;
+      consecutive++;
+      remainingNeeded--;
       continue;
     }
 
@@ -157,7 +201,7 @@ function repairSchedule(cond, days, schedule, rng) {
   let workDays = schedule.filter(Boolean).length;
 
   const canWork = (i) => {
-    if (days[i].forcedOff || schedule[i]) return false;
+    if (days[i].forcedOff || days[i].forcedWork || schedule[i]) return false;
     schedule[i] = true;
     const run = runLengthAt(schedule, i);
     schedule[i] = false;
@@ -179,7 +223,7 @@ function repairSchedule(cond, days, schedule, rng) {
   while (workDays > cond.maxWorkDays && tries < 500) {
     const candidates = [];
     for (let i = 0; i < schedule.length; i++) {
-      if (schedule[i] && !days[i].forcedOff) candidates.push(i);
+      if (schedule[i] && !days[i].forcedOff && !days[i].forcedWork) candidates.push(i);
     }
     if (candidates.length === 0) break;
     const preferred = candidates.filter((i) => cond.preferredOffWeekdays.has(days[i].weekday));
@@ -266,7 +310,7 @@ function localSearch(cond, days, schedule, targetDays, rng, iterations = 400) {
     const i = Math.floor(rng() * n);
     const j = Math.floor(rng() * n);
     if (i === j) continue;
-    if (days[i].forcedOff || days[j].forcedOff) continue;
+    if (days[i].forcedOff || days[j].forcedOff || days[i].forcedWork || days[j].forcedWork) continue;
     if (schedule[i] === schedule[j]) continue;
 
     [schedule[i], schedule[j]] = [schedule[j], schedule[i]];
