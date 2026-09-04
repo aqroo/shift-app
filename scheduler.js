@@ -24,7 +24,7 @@ function dateKey(year, month, day) {
   return year * 10000 + month * 100 + day;
 }
 
-function resolveReferenceToday(cond) {
+function resolveToday(cond) {
   if (cond.referenceDate) return cond.referenceDate; // {year, month, day} 形式(テスト用)
   const t = new Date();
   return { year: t.getFullYear(), month: t.getMonth() + 1, day: t.getDate() };
@@ -32,8 +32,15 @@ function resolveReferenceToday(cond) {
 
 function buildDays(cond) {
   const n = daysInMonth(cond.year, cond.month);
-  const today = resolveReferenceToday(cond);
+  const today = resolveToday(cond);
   const todayKey = dateKey(today.year, today.month, today.day);
+
+  // 「確定済みの最終日」(バイト先のクール制などで、今日より先の日程も
+  // すでに確定して変更できない場合の締め切り日)。指定が無ければ
+  // 今日より前の日だけがロック対象になる(従来通りの挙動)。
+  const confirmedKey = cond.confirmedThroughDate
+    ? dateKey(cond.confirmedThroughDate.year, cond.confirmedThroughDate.month, cond.confirmedThroughDate.day)
+    : null;
 
   const days = [];
   for (let d = 1; d <= n; d++) {
@@ -44,19 +51,21 @@ function buildDays(cond) {
       !forcedWork &&
       (cond.absoluteOffDates.has(d) || cond.fixedOffWeekdays.has(wd));
 
-    // 「今日」より前の日は、明示的に「すでに出勤した日」に選ばれていない限り、
-    // 後から出勤を割り当てられるべきではない(過去は変えられないため)。
-    // そのため、自動的に「休みだった」として固定する。
-    const isPast = !forcedWork && dateKey(cond.year, cond.month, d) < todayKey;
-    const pastUnworked = isPast && !explicitOff;
+    // 「今日より前」、または「確定済みの最終日以前」の日は、明示的に
+    // 「すでに出勤した日」に選ばれていない限り、アルゴリズムが自由に
+    // 出勤を割り当てるべきではない(すでに実際のシフトが決まっているため)。
+    // そのため、自動的に「休みだった/休みになる」ものとして固定する。
+    const key = dateKey(cond.year, cond.month, d);
+    const isLocked = !forcedWork && (key < todayKey || (confirmedKey !== null && key <= confirmedKey));
+    const autoOffLocked = isLocked && !explicitOff;
 
     days.push({
       day: d,
       weekday: wd,
-      forcedOff: explicitOff || pastUnworked,
+      forcedOff: explicitOff || autoOffLocked,
       forcedWork: !!forcedWork,
       explicitOff,
-      pastUnworked,
+      autoOffLocked,
     });
   }
   return days;
@@ -71,16 +80,16 @@ function checkFeasibility(cond) {
   const days = buildDays(cond);
   const forcedOffCount = days.filter((d) => d.forcedOff).length;
   const forcedWorkCount = days.filter((d) => d.forcedWork).length;
-  const pastUnworkedCount = days.filter((d) => d.pastUnworked).length;
+  const autoOffLockedCount = days.filter((d) => d.autoOffLocked).length;
   const available = days.length - forcedOffCount;
 
   if (available < cond.minWorkDays) {
-    const pastNote = pastUnworkedCount > 0
-      ? `(うち、すでに過ぎていて「すでに出勤した日」に選ばれていない日が${pastUnworkedCount}日含まれます)`
+    const lockedNote = autoOffLockedCount > 0
+      ? `(うち、確定済みで「すでに出勤した日」に選ばれていない日が${autoOffLockedCount}日含まれます)`
       : "";
     return {
       feasible: false,
-      reason: `固定休・絶対休み・過ぎた日などが多く、出勤可能な日が${available}日しかありません。${pastNote}最低出勤日数(${cond.minWorkDays}日)を満たせません。固定休を減らすか、最低出勤日数を下げるか、すでに出勤した日を選び直してください。`,
+      reason: `固定休・絶対休み・確定済みの日などが多く、出勤可能な日が${available}日しかありません。${lockedNote}最低出勤日数(${cond.minWorkDays}日)を満たせません。固定休を減らすか、最低出勤日数を下げるか、すでに出勤(予定)の日を選び直してください。`,
     };
   }
 
