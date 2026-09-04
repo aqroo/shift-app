@@ -14,6 +14,7 @@
     altIndex: 0,          // 現在選ばれている候補のインデックス
     schedule: null,       // 現在表示中の(手動編集込みの)スケジュール配列
     formAbsoluteOff: new Set(),
+    formAbsoluteWork: new Set(),
     formFixedOff: new Set(),
     formPreferredOff: new Set(),
     sheetIndex: null,
@@ -93,8 +94,8 @@
     return { year: y, month: m };
   }
 
-  function renderAbsoluteOffCalendar() {
-    const container = $("absoluteOffCalendar");
+  function renderPickCalendar(containerId, selectedSet, otherSet) {
+    const container = $(containerId);
     container.innerHTML = "";
     const ym = getFormYearMonth();
     if (!ym) return;
@@ -119,15 +120,29 @@
       const cell = document.createElement("button");
       cell.type = "button";
       cell.className = "cal-cell";
+      if (containerId === "absoluteWorkCalendar") cell.classList.add("cal-cell--work-pick");
       cell.textContent = String(d);
-      if (state.formAbsoluteOff.has(d)) cell.classList.add("is-selected");
+      if (selectedSet.has(d)) cell.classList.add("is-selected");
       cell.addEventListener("click", () => {
-        if (state.formAbsoluteOff.has(d)) state.formAbsoluteOff.delete(d);
-        else state.formAbsoluteOff.add(d);
-        cell.classList.toggle("is-selected");
+        if (selectedSet.has(d)) {
+          selectedSet.delete(d);
+        } else {
+          selectedSet.add(d);
+          if (otherSet) otherSet.delete(d); // 「休み」と「出勤済み」は同じ日に両立しない
+        }
+        renderAbsoluteOffCalendar();
+        renderAbsoluteWorkCalendar();
       });
       container.appendChild(cell);
     }
+  }
+
+  function renderAbsoluteOffCalendar() {
+    renderPickCalendar("absoluteOffCalendar", state.formAbsoluteOff, state.formAbsoluteWork);
+  }
+
+  function renderAbsoluteWorkCalendar() {
+    renderPickCalendar("absoluteWorkCalendar", state.formAbsoluteWork, state.formAbsoluteOff);
   }
 
   // ---- フォーム -> 条件オブジェクト --------------------------------------------
@@ -160,6 +175,7 @@
       maxWorkDays,
       maxConsecutiveWorkDays,
       absoluteOffDates: new Set(state.formAbsoluteOff),
+      absoluteWorkDates: new Set(state.formAbsoluteWork),
       fixedOffWeekdays: new Set(state.formFixedOff),
       preferredOffWeekdays: new Set(state.formPreferredOff),
       wantRenkyu,
@@ -188,10 +204,12 @@
     $("inputRenkyu").setAttribute("aria-checked", cond.wantRenkyu ? "true" : "false");
 
     state.formAbsoluteOff = new Set(cond.absoluteOffDates);
+    state.formAbsoluteWork = new Set(cond.absoluteWorkDates || []);
     state.formFixedOff = new Set(cond.fixedOffWeekdays);
     state.formPreferredOff = new Set(cond.preferredOffWeekdays);
     renderWeekdayChips();
     renderAbsoluteOffCalendar();
+    renderAbsoluteWorkCalendar();
   }
 
   // ---- 生成 ------------------------------------------------------------
@@ -287,7 +305,7 @@
       const cell = document.createElement("button");
       cell.type = "button";
       cell.className = "cal-cell " + (state.schedule[i] ? "is-work" : "is-off");
-      if (day.forcedOff) cell.classList.add("is-forced");
+      if (day.forcedOff || day.forcedWork) cell.classList.add("is-forced");
       if (today.y === cond.year && today.m === cond.month && today.d === day.day) {
         cell.classList.add("is-today");
       }
@@ -334,7 +352,10 @@
     const note = $("sheetNote");
 
     if (day.forcedOff) {
-      note.textContent = "この日は「絶対に休む日」または「毎週の固定休」として設定されています。";
+      note.textContent = "この日は「絶対に休みたい日」または「毎週の固定休」として設定されています。";
+      toggleBtn.hidden = true;
+    } else if (day.forcedWork) {
+      note.textContent = "この日は「すでに出勤した日」として固定されています。";
       toggleBtn.hidden = true;
     } else {
       note.textContent = "";
@@ -365,6 +386,7 @@
     return {
       ...cond,
       absoluteOffDates: Array.from(cond.absoluteOffDates),
+      absoluteWorkDates: Array.from(cond.absoluteWorkDates || []),
       fixedOffWeekdays: Array.from(cond.fixedOffWeekdays),
       preferredOffWeekdays: Array.from(cond.preferredOffWeekdays),
     };
@@ -374,6 +396,7 @@
     return {
       ...obj,
       absoluteOffDates: new Set(obj.absoluteOffDates),
+      absoluteWorkDates: new Set(obj.absoluteWorkDates || []),
       fixedOffWeekdays: new Set(obj.fixedOffWeekdays),
       preferredOffWeekdays: new Set(obj.preferredOffWeekdays),
     };
@@ -456,10 +479,13 @@
     $("inputMonth").value = defaultMonthValue();
     renderWeekdayChips();
     renderAbsoluteOffCalendar();
+    renderAbsoluteWorkCalendar();
 
     $("inputMonth").addEventListener("change", () => {
       state.formAbsoluteOff = new Set();
+      state.formAbsoluteWork = new Set();
       renderAbsoluteOffCalendar();
+      renderAbsoluteWorkCalendar();
     });
 
     $("inputRenkyu").addEventListener("click", (e) => {
