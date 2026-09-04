@@ -351,11 +351,13 @@
     const toggleBtn = $("sheetToggleBtn");
     const note = $("sheetNote");
 
-    if (day.forcedOff) {
-      note.textContent = "この日は「絶対に休みたい日」または「毎週の固定休」として設定されています。";
-      toggleBtn.hidden = true;
-    } else if (day.forcedWork) {
+    if (day.forcedWork) {
       note.textContent = "この日は「すでに出勤した日」として固定されています。";
+      toggleBtn.hidden = true;
+    } else if (day.forcedOff) {
+      note.textContent = day.pastUnworked
+        ? "この日はすでに過ぎており、「すでに出勤した日」に選ばれていないため、休みだったものとして扱っています。出勤していた場合は、条件を編集して「すでに出勤した日」から選び直してください。"
+        : "この日は「絶対に休みたい日」または「毎週の固定休」として設定されています。";
       toggleBtn.hidden = true;
     } else {
       note.textContent = "";
