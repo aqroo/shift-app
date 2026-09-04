@@ -136,12 +136,19 @@
     const ym = getFormYearMonth();
     const wage = Number($("inputWage").value);
     const hours = Number($("inputHours").value);
-    const minDays = Number($("inputMinDays").value);
-    const maxDays = Number($("inputMaxDays").value);
-    const maxConsecutive = Number($("inputMaxConsecutive").value);
     const targetSalaryRaw = $("inputTargetSalary").value;
     const targetSalary = targetSalaryRaw ? Number(targetSalaryRaw) : null;
     const wantRenkyu = $("inputRenkyu").getAttribute("aria-checked") === "true";
+
+    // 日数の上限系は空欄OK(任意)。空欄なら「制限なし」として扱う。
+    const daysInMonth = ym ? Scheduler.daysInMonth(ym.year, ym.month) : 31;
+    const minRaw = $("inputMinDays").value;
+    const maxRaw = $("inputMaxDays").value;
+    const maxConsecutiveRaw = $("inputMaxConsecutive").value;
+
+    const minWorkDays = minRaw ? Number(minRaw) : 0;
+    const maxWorkDays = maxRaw ? Number(maxRaw) : daysInMonth;
+    const maxConsecutiveWorkDays = maxConsecutiveRaw ? Number(maxConsecutiveRaw) : daysInMonth;
 
     return {
       year: ym ? ym.year : null,
@@ -149,9 +156,9 @@
       hourlyWage: wage,
       hoursPerDay: hours,
       targetSalary,
-      minWorkDays: minDays,
-      maxWorkDays: maxDays,
-      maxConsecutiveWorkDays: maxConsecutive,
+      minWorkDays,
+      maxWorkDays,
+      maxConsecutiveWorkDays,
       absoluteOffDates: new Set(state.formAbsoluteOff),
       fixedOffWeekdays: new Set(state.formFixedOff),
       preferredOffWeekdays: new Set(state.formPreferredOff),
@@ -163,10 +170,10 @@
     if (!cond.year || !cond.month) return "対象年月を選んでください。";
     if (!cond.hourlyWage || cond.hourlyWage <= 0) return "時給を入力してください。";
     if (!cond.hoursPerDay || cond.hoursPerDay <= 0) return "1日の勤務時間を入力してください。";
-    if (!Number.isFinite(cond.minWorkDays) || cond.minWorkDays < 0) return "最低出勤日数を入力してください。";
-    if (!Number.isFinite(cond.maxWorkDays) || cond.maxWorkDays < 0) return "上限日数を入力してください。";
+    if (cond.minWorkDays < 0) return "最低出勤日数は0以上で入力してください。";
+    if (cond.maxWorkDays < 0) return "上限日数は0以上で入力してください。";
     if (cond.minWorkDays > cond.maxWorkDays) return "最低出勤日数が上限日数を超えています。";
-    if (!cond.maxConsecutiveWorkDays || cond.maxConsecutiveWorkDays < 1) return "最大連勤日数を入力してください。";
+    if (cond.maxConsecutiveWorkDays < 1) return "最大連勤日数は1以上で入力してください。";
     return null;
   }
 
