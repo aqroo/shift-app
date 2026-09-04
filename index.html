@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>シフト自動生成</title>
+
+<meta name="theme-color" content="#F7F5F0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="シフト帳">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <button id="btnHistory" class="icon-btn" aria-label="履歴を見る" title="履歴">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 4v6h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.6 15a8 8 0 1 0 1.5-8.3L4 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <h1 class="topbar-title">シフト自動生成</h1>
+    <span class="topbar-spacer" aria-hidden="true"></span>
+  </header>
+
+  <!-- ============ 条件入力ビュー ============ -->
+  <main id="view-form" class="view">
+    <form id="conditionForm">
+
+      <section class="card">
+        <h2 class="card-title">基本情報</h2>
+
+        <div class="field">
+          <label for="inputMonth">対象年月</label>
+          <input type="month" id="inputMonth" required>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="inputWage">時給（円）</label>
+            <input type="number" id="inputWage" inputmode="numeric" min="0" step="1" placeholder="1300" required>
+          </div>
+          <div class="field">
+            <label for="inputHours">1日の勤務時間</label>
+            <input type="number" id="inputHours" inputmode="decimal" min="0" step="0.5" placeholder="6" required>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">絶対条件</h2>
+        <p class="card-lead">必ず守りたい条件です。</p>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="inputMinDays">最低出勤日数</label>
+            <input type="number" id="inputMinDays" inputmode="numeric" min="0" step="1" placeholder="10" required>
+          </div>
+          <div class="field">
+            <label for="inputMaxDays">上限日数</label>
+            <input type="number" id="inputMaxDays" inputmode="numeric" min="0" step="1" placeholder="12" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="inputMaxConsecutive">最大連勤日数</label>
+          <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3" required>
+        </div>
+
+        <div class="field">
+          <label>毎週の固定休</label>
+          <div id="fixedOffWeekdays" class="weekday-chips"></div>
+        </div>
+
+        <div class="field">
+          <label>絶対に休む日</label>
+          <p class="field-hint">カレンダーの日付をタップして選んでください。</p>
+          <div id="absoluteOffCalendar" class="mini-calendar"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">希望条件</h2>
+        <p class="card-lead">できるだけ叶えたい条件です。</p>
+
+        <div class="field">
+          <label for="inputTargetSalary">月給目標（円・任意）</label>
+          <input type="number" id="inputTargetSalary" inputmode="numeric" min="0" step="1000" placeholder="80000">
+        </div>
+
+        <div class="field">
+          <label>できれば休みたい曜日</label>
+          <div id="preferredOffWeekdays" class="weekday-chips"></div>
+        </div>
+
+        <div class="field field-toggle">
+          <label for="inputRenkyu">連休を作りたい</label>
+          <button type="button" id="inputRenkyu" class="switch" role="switch" aria-checked="true"></button>
+        </div>
+      </section>
+
+      <p id="formError" class="form-error" hidden></p>
+    </form>
+
+    <div class="bottom-bar">
+      <button type="submit" form="conditionForm" id="btnGenerate" class="btn btn-primary btn-block">スケジュールを生成する</button>
+    </div>
+  </main>
+
+  <!-- ============ 生成中ビュー ============ -->
+  <main id="view-generating" class="view" hidden>
+    <div class="generating">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>条件に合うパターンを探しています…</p>
+    </div>
+  </main>
+
+  <!-- ============ 結果ビュー ============ -->
+  <main id="view-result" class="view" hidden>
+
+    <section class="card summary-card">
+      <div class="summary-salary">
+        <span class="summary-salary-value" id="resultSalary">¥0</span>
+        <span class="summary-salary-diff" id="resultSalaryDiff"></span>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span class="summary-item-label">出勤</span>
+          <span class="summary-item-value" id="resultWorkDays">0日</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-item-label">休み</span>
+          <span class="summary-item-value" id="resultOffDays">0日</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-item-label">最大連勤</span>
+          <span class="summary-item-value" id="resultMaxConsecutive">0日</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="calendar-header">
+        <span id="resultMonthLabel"></span>
+        <span class="legend">
+          <span class="legend-dot legend-dot--work"></span>出勤
+          <span class="legend-dot legend-dot--off"></span>休み
+          <span class="legend-dot legend-dot--forced"></span>固定
+        </span>
+      </div>
+      <div id="resultCalendar" class="mini-calendar mini-calendar--result"></div>
+      <p class="field-hint">日付をタップすると出勤・休みを切り替えられます。</p>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">別のパターン</h2>
+      <div id="alternatives" class="alternatives"></div>
+    </section>
+
+    <div class="bottom-bar bottom-bar--split">
+      <button type="button" id="btnEditConditions" class="btn btn-secondary">条件を編集</button>
+      <button type="button" id="btnRegenerate" class="btn btn-primary">再生成</button>
+    </div>
+  </main>
+
+  <!-- ============ 履歴ビュー ============ -->
+  <main id="view-history" class="view" hidden>
+    <section class="card">
+      <h2 class="card-title">保存された月</h2>
+      <div id="historyList" class="history-list"></div>
+      <p id="historyEmpty" class="field-hint" hidden>まだ保存されたスケジュールはありません。</p>
+    </section>
+  </main>
+
+</div>
+
+<!-- 日付編集ボトムシート -->
+<div id="daySheet" class="sheet-overlay" hidden>
+  <div class="sheet">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <p class="sheet-date" id="sheetDate"></p>
+    <p class="sheet-note" id="sheetNote"></p>
+    <button type="button" id="sheetToggleBtn" class="btn btn-primary btn-block"></button>
+    <button type="button" id="sheetCloseBtn" class="btn btn-ghost btn-block">閉じる</button>
+  </div>
+</div>
+
+<script src="scheduler.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
