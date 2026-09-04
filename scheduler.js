@@ -20,16 +20,44 @@ function weekdayOf(year, month, day) {
   return (jsWd + 6) % 7;
 }
 
+function dateKey(year, month, day) {
+  return year * 10000 + month * 100 + day;
+}
+
+function resolveReferenceToday(cond) {
+  if (cond.referenceDate) return cond.referenceDate; // {year, month, day} 形式(テスト用)
+  const t = new Date();
+  return { year: t.getFullYear(), month: t.getMonth() + 1, day: t.getDate() };
+}
+
 function buildDays(cond) {
   const n = daysInMonth(cond.year, cond.month);
+  const today = resolveReferenceToday(cond);
+  const todayKey = dateKey(today.year, today.month, today.day);
+
   const days = [];
   for (let d = 1; d <= n; d++) {
     const wd = weekdayOf(cond.year, cond.month, d);
     const forcedWork = cond.absoluteWorkDates && cond.absoluteWorkDates.has(d);
-    const forcedOff =
+
+    const explicitOff =
       !forcedWork &&
       (cond.absoluteOffDates.has(d) || cond.fixedOffWeekdays.has(wd));
-    days.push({ day: d, weekday: wd, forcedOff, forcedWork: !!forcedWork });
+
+    // 「今日」より前の日は、明示的に「すでに出勤した日」に選ばれていない限り、
+    // 後から出勤を割り当てられるべきではない(過去は変えられないため)。
+    // そのため、自動的に「休みだった」として固定する。
+    const isPast = !forcedWork && dateKey(cond.year, cond.month, d) < todayKey;
+    const pastUnworked = isPast && !explicitOff;
+
+    days.push({
+      day: d,
+      weekday: wd,
+      forcedOff: explicitOff || pastUnworked,
+      forcedWork: !!forcedWork,
+      explicitOff,
+      pastUnworked,
+    });
   }
   return days;
 }
@@ -43,12 +71,16 @@ function checkFeasibility(cond) {
   const days = buildDays(cond);
   const forcedOffCount = days.filter((d) => d.forcedOff).length;
   const forcedWorkCount = days.filter((d) => d.forcedWork).length;
+  const pastUnworkedCount = days.filter((d) => d.pastUnworked).length;
   const available = days.length - forcedOffCount;
 
   if (available < cond.minWorkDays) {
+    const pastNote = pastUnworkedCount > 0
+      ? `(うち、すでに過ぎていて「すでに出勤した日」に選ばれていない日が${pastUnworkedCount}日含まれます)`
+      : "";
     return {
       feasible: false,
-      reason: `固定休・絶対休みの日が多く、出勤可能な日が${available}日しかありません。最低出勤日数(${cond.minWorkDays}日)を満たせません。固定休を減らすか、最低出勤日数を下げてください。`,
+      reason: `固定休・絶対休み・過ぎた日などが多く、出勤可能な日が${available}日しかありません。${pastNote}最低出勤日数(${cond.minWorkDays}日)を満たせません。固定休を減らすか、最低出勤日数を下げるか、すでに出勤した日を選び直してください。`,
     };
   }
 
