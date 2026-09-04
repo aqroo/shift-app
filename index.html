@@ -12,17 +12,39 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
+
+<!-- テーマ・アクセントカラーの初期反映(ちらつき防止のため、
+     スタイル適用前にできるだけ早く実行する) -->
+<script>
+(function () {
+  try {
+    var theme = localStorage.getItem("shiftapp:theme") || "auto";
+    var accent = localStorage.getItem("shiftapp:accent") || "teal";
+    var resolved = theme;
+    if (theme === "auto") {
+      resolved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.dataset.themeMode = theme;
+    document.documentElement.dataset.accent = accent;
+  } catch (e) { /* localStorageが使えない環境でも落ちないようにする */ }
+})();
+</script>
 </head>
 <body>
 
 <div class="app">
 
   <header class="topbar">
+    <h1 class="topbar-title">シフト自動生成</h1>
+    <span class="topbar-spacer" aria-hidden="true"></span>
     <button id="btnHistory" class="icon-btn" aria-label="履歴を見る" title="履歴">
       <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 4v6h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.6 15a8 8 0 1 0 1.5-8.3L4 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <h1 class="topbar-title">シフト自動生成</h1>
-    <span class="topbar-spacer" aria-hidden="true"></span>
+    <button id="btnSettings" class="icon-btn" aria-label="設定" title="設定">
+      <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
   </header>
 
   <!-- ============ 条件入力ビュー ============ -->
@@ -52,58 +74,67 @@
       <section class="card">
         <h2 class="card-title">絶対条件</h2>
         <p class="card-lead">
-          設定した項目は必ず守って生成します。空欄・未選択の項目は
-          「制限なし」として扱われます。
+          設定した項目は必ず守って生成します。空欄・未選択は「制限なし」として
+          扱われます。
         </p>
 
         <div class="field-row">
           <div class="field">
-            <label for="inputMinDays">最低出勤日数（任意）</label>
+            <label for="inputMinDays">最低出勤日数</label>
             <input type="number" id="inputMinDays" inputmode="numeric" min="0" step="1" placeholder="10">
           </div>
           <div class="field">
-            <label for="inputMaxDays">上限日数（任意）</label>
+            <label for="inputMaxDays">上限日数</label>
             <input type="number" id="inputMaxDays" inputmode="numeric" min="0" step="1" placeholder="12">
           </div>
         </div>
-        <p class="field-hint">空欄の場合、日数の制限なしとして生成します。</p>
-
-        <div class="field">
-          <label for="inputMaxConsecutive">最大連勤日数（任意）</label>
-          <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3">
+        <div class="field-row">
+          <div class="field">
+            <label for="inputMaxConsecutive">最大連勤日数</label>
+            <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3">
+          </div>
+          <div class="field">
+            <label for="inputMinWorkBlock">まとめる目安（連続◯日）</label>
+            <input type="number" id="inputMinWorkBlock" inputmode="numeric" min="1" step="1" placeholder="なし">
+          </div>
         </div>
-        <p class="field-hint">空欄の場合、連勤日数の制限なしとして生成します。</p>
+        <p class="field-hint">
+          「まとめる目安」を設定すると、1〜2日だけの飛び石出勤を避け、
+          指定日数以上まとまった連勤にしやすくなります。
+        </p>
 
         <div class="field">
-          <label>毎週の固定休（任意）</label>
-          <div id="fixedOffWeekdays" class="weekday-chips"></div>
-        </div>
-
-        <div class="field">
-          <label>絶対に休みたい日</label>
-          <p class="field-hint">カレンダーの日付をタップして選んでください。</p>
-          <div id="absoluteOffCalendar" class="mini-calendar"></div>
-        </div>
-
-        <div class="field">
-          <label>すでに出勤した日（任意）</label>
-          <p class="field-hint">
-            月の途中から生成する場合など、すでに出勤済みの日をタップしておくと、
-            その日は出勤のまま固定されます。
+          <div class="calendar-mode-header">
+            <label>休み・出勤日の指定</label>
+            <div class="segmented" id="pickModeSwitch">
+              <button type="button" class="segmented-btn is-active" data-mode="off">休みにする日</button>
+              <button type="button" class="segmented-btn" data-mode="work">出勤済みの日</button>
+            </div>
+          </div>
+          <p class="field-hint" id="pickModeHint">
+            カレンダーの日付をタップすると「絶対に休みたい日」として選ばれます。
           </p>
-          <div id="absoluteWorkCalendar" class="mini-calendar"></div>
+          <div id="pickCalendar" class="mini-calendar"></div>
         </div>
 
-        <div class="field">
-          <label for="inputConfirmedThroughDay">シフト確定済みの最終日（日にち・任意）</label>
-          <input type="number" id="inputConfirmedThroughDay" inputmode="numeric" min="1" step="1" placeholder="10">
-          <p class="field-hint">
-            「クール制」などで、今日より先の日程もすでに確定していて変更できない
-            場合、その最終日を入力してください。その日までの日は、上の
-            「すでに出勤した日」で選んだ日以外はすべて休みとして生成されます。
-            空欄の場合、今日より前の日にのみ自動的に適用されます。
-          </p>
-        </div>
+        <details class="details-block">
+          <summary>詳細設定（固定休・確定済み期間）</summary>
+
+          <div class="field">
+            <label>毎週の固定休</label>
+            <div id="fixedOffWeekdays" class="weekday-chips"></div>
+          </div>
+
+          <div class="field">
+            <label for="inputConfirmedThroughDay">シフト確定済みの最終日（日にち）</label>
+            <input type="number" id="inputConfirmedThroughDay" inputmode="numeric" min="1" step="1" placeholder="10">
+            <p class="field-hint">
+              「クール制」などで、今日より先の日程もすでに確定していて
+              変更できない場合、その最終日を入力してください。その日までは、
+              上で「出勤済みの日」に選んだ日以外はすべて休みとして生成されます。
+            </p>
+          </div>
+        </details>
       </section>
 
       <section class="card">
@@ -111,7 +142,7 @@
         <p class="card-lead">できるだけ叶えたい条件です（任意）。</p>
 
         <div class="field">
-          <label for="inputTargetSalary">月給目標（円・任意）</label>
+          <label for="inputTargetSalary">月給目標（円）</label>
           <input type="number" id="inputTargetSalary" inputmode="numeric" min="0" step="1000" placeholder="80000">
         </div>
 
@@ -192,10 +223,54 @@
 
   <!-- ============ 履歴ビュー ============ -->
   <main id="view-history" class="view" hidden>
+    <button type="button" class="back-link" data-back-from="history">← 戻る</button>
     <section class="card">
       <h2 class="card-title">保存された月</h2>
       <div id="historyList" class="history-list"></div>
       <p id="historyEmpty" class="field-hint" hidden>まだ保存されたスケジュールはありません。</p>
+    </section>
+  </main>
+
+  <!-- ============ 設定ビュー ============ -->
+  <main id="view-settings" class="view" hidden>
+    <button type="button" class="back-link" data-back-from="settings">← 戻る</button>
+
+    <section class="card">
+      <h2 class="card-title">テーマ</h2>
+      <div class="segmented segmented--full" id="themeSwitch">
+        <button type="button" class="segmented-btn" data-theme-mode="light">ライト</button>
+        <button type="button" class="segmented-btn" data-theme-mode="dark">ダーク</button>
+        <button type="button" class="segmented-btn" data-theme-mode="auto">自動</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">アクセントカラー</h2>
+      <div class="accent-dots" id="accentDots"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">プロフィール</h2>
+      <p class="card-lead">
+        時給や条件をまとめて保存しておき、バイト先ごとに呼び出せます。
+      </p>
+
+      <div class="field-row">
+        <div class="field" style="flex: 2;">
+          <label for="profileNameInput">プロフィール名</label>
+          <input type="text" id="profileNameInput" placeholder="例: カフェA">
+        </div>
+      </div>
+      <button type="button" id="btnSaveProfile" class="btn btn-secondary btn-block">現在の条件を保存</button>
+
+      <div id="profileList" class="history-list" style="margin-top: 14px;"></div>
+      <p id="profileEmpty" class="field-hint" hidden>保存されたプロフィールはまだありません。</p>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">バージョン情報</h2>
+      <p class="version-current">v<span id="versionCurrent"></span></p>
+      <div id="changelogList" class="changelog-list"></div>
     </section>
   </main>
 
@@ -209,6 +284,16 @@
     <p class="sheet-note" id="sheetNote"></p>
     <button type="button" id="sheetToggleBtn" class="btn btn-primary btn-block"></button>
     <button type="button" id="sheetCloseBtn" class="btn btn-ghost btn-block">閉じる</button>
+  </div>
+</div>
+
+<!-- プロフィール削除確認シート -->
+<div id="confirmSheet" class="sheet-overlay" hidden>
+  <div class="sheet">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <p class="sheet-date" id="confirmTitle"></p>
+    <button type="button" id="confirmOkBtn" class="btn btn-primary btn-block">削除する</button>
+    <button type="button" id="confirmCancelBtn" class="btn btn-ghost btn-block">キャンセル</button>
   </div>
 </div>
 
