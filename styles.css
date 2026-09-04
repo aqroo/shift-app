@@ -255,6 +255,11 @@ input:focus-visible {
   font-weight: 700;
 }
 
+.cal-cell--work-pick.is-selected {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* 結果カレンダー */
 .mini-calendar--result .cal-cell.is-work {
   background: var(--accent);
