@@ -221,16 +221,19 @@
     const targetSalary = targetSalaryRaw ? Number(targetSalaryRaw) : null;
     const wantRenkyu = $("inputRenkyu").getAttribute("aria-checked") === "true";
 
-    const daysInMonth = ym ? Scheduler.daysInMonth(ym.year, ym.month) : 31;
     const minRaw = $("inputMinDays").value;
     const maxRaw = $("inputMaxDays").value;
     const maxConsecutiveRaw = $("inputMaxConsecutive").value;
-    const minWorkBlockRaw = $("inputMinWorkBlock").value;
+    const consolidateWork = $("inputConsolidate").getAttribute("aria-checked") === "true";
 
-    const minWorkDays = minRaw ? Number(minRaw) : 0;
-    const maxWorkDays = maxRaw ? Number(maxRaw) : daysInMonth;
-    const maxConsecutiveWorkDays = maxConsecutiveRaw ? Number(maxConsecutiveRaw) : daysInMonth;
-    const minWorkBlock = minWorkBlockRaw ? Number(minWorkBlockRaw) : null;
+    const minWorkDays = minRaw ? Number(minRaw) : null;
+    const maxWorkDays = maxRaw ? Number(maxRaw) : null;
+    const maxConsecutiveWorkDays = maxConsecutiveRaw ? Number(maxConsecutiveRaw) : null;
+    // 「出勤はまとめたい」がONの場合、内部的に3日以上のまとまりを目指す
+    // (最大連勤日数がそれより小さい場合はその日数に合わせる)
+    const minWorkBlock = consolidateWork
+      ? Math.min(3, maxConsecutiveWorkDays || 3)
+      : null;
 
     const confirmedThroughRaw = $("inputConfirmedThroughDay").value;
     const confirmedThroughDate = (confirmedThroughRaw && ym)
@@ -260,12 +263,13 @@
     if (!cond.year || !cond.month) return "対象年月を選んでください。";
     if (!cond.hourlyWage || cond.hourlyWage <= 0) return "時給を入力してください。";
     if (!cond.hoursPerDay || cond.hoursPerDay <= 0) return "1日の勤務時間を入力してください。";
-    if (cond.minWorkDays < 0) return "最低出勤日数は0以上で入力してください。";
-    if (cond.maxWorkDays < 0) return "上限日数は0以上で入力してください。";
-    if (cond.minWorkDays > cond.maxWorkDays) return "最低出勤日数が上限日数を超えています。";
-    if (cond.maxConsecutiveWorkDays < 1) return "最大連勤日数は1以上で入力してください。";
-    if (cond.minWorkBlock && cond.minWorkBlock > cond.maxConsecutiveWorkDays) {
-      return "「まとめる目安」の日数が最大連勤日数を超えています。";
+    if (cond.minWorkDays != null && cond.minWorkDays < 0) return "最低出勤日数は0以上で入力してください。";
+    if (cond.maxWorkDays != null && cond.maxWorkDays < 0) return "上限日数は0以上で入力してください。";
+    if (cond.minWorkDays != null && cond.maxWorkDays != null && cond.minWorkDays > cond.maxWorkDays) {
+      return "最低出勤日数が上限日数を超えています。";
+    }
+    if (cond.maxConsecutiveWorkDays != null && cond.maxConsecutiveWorkDays < 1) {
+      return "連続勤務の上限は1以上で入力してください。";
     }
     return null;
   }
@@ -274,10 +278,10 @@
     $("inputMonth").value = `${cond.year}-${String(cond.month).padStart(2, "0")}`;
     $("inputWage").value = cond.hourlyWage;
     $("inputHours").value = cond.hoursPerDay;
-    $("inputMinDays").value = cond.minWorkDays || "";
-    $("inputMaxDays").value = cond.maxWorkDays || "";
-    $("inputMaxConsecutive").value = cond.maxConsecutiveWorkDays || "";
-    $("inputMinWorkBlock").value = cond.minWorkBlock || "";
+    $("inputMinDays").value = cond.minWorkDays ?? "";
+    $("inputMaxDays").value = cond.maxWorkDays ?? "";
+    $("inputMaxConsecutive").value = cond.maxConsecutiveWorkDays ?? "";
+    $("inputConsolidate").setAttribute("aria-checked", cond.minWorkBlock ? "true" : "false");
     $("inputTargetSalary").value = cond.targetSalary || "";
     $("inputConfirmedThroughDay").value = cond.confirmedThroughDate ? cond.confirmedThroughDate.day : "";
     $("inputRenkyu").setAttribute("aria-checked", cond.wantRenkyu ? "true" : "false");
@@ -705,10 +709,11 @@
       if (btn) setPickMode(btn.dataset.mode);
     });
 
-    $("inputRenkyu").addEventListener("click", (e) => {
-      const btn = e.currentTarget;
-      const on = btn.getAttribute("aria-checked") === "true";
-      btn.setAttribute("aria-checked", on ? "false" : "true");
+    document.querySelectorAll(".switch").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const on = btn.getAttribute("aria-checked") === "true";
+        btn.setAttribute("aria-checked", on ? "false" : "true");
+      });
     });
 
     $("conditionForm").addEventListener("submit", (e) => {
