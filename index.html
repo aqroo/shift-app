@@ -80,28 +80,22 @@
 
         <div class="field-row">
           <div class="field">
-            <label for="inputMinDays">最低出勤日数</label>
+            <label for="inputMinDays">最低でも出勤したい日数</label>
             <input type="number" id="inputMinDays" inputmode="numeric" min="0" step="1" placeholder="10">
           </div>
           <div class="field">
-            <label for="inputMaxDays">上限日数</label>
+            <label for="inputMaxDays">出勤日数の上限</label>
             <input type="number" id="inputMaxDays" inputmode="numeric" min="0" step="1" placeholder="12">
           </div>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="inputMaxConsecutive">最大連勤日数</label>
-            <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3">
-          </div>
-          <div class="field">
-            <label for="inputMinWorkBlock">まとめる目安（連続◯日）</label>
-            <input type="number" id="inputMinWorkBlock" inputmode="numeric" min="1" step="1" placeholder="なし">
-          </div>
+
+        <div class="field">
+          <label for="inputMaxConsecutive">連続で働いてよい日数の上限</label>
+          <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3">
+          <p class="field-hint">
+            例えば3を入れると、4日以上続けて出勤する日程にはなりません。
+          </p>
         </div>
-        <p class="field-hint">
-          「まとめる目安」を設定すると、1〜2日だけの飛び石出勤を避け、
-          指定日数以上まとまった連勤にしやすくなります。
-        </p>
 
         <div class="field">
           <div class="calendar-mode-header">
@@ -155,6 +149,15 @@
           <label for="inputRenkyu">連休を作りたい</label>
           <button type="button" id="inputRenkyu" class="switch" role="switch" aria-checked="true"></button>
         </div>
+
+        <div class="field field-toggle">
+          <label for="inputConsolidate">出勤はまとめたい</label>
+          <button type="button" id="inputConsolidate" class="switch" role="switch" aria-checked="false"></button>
+        </div>
+        <p class="field-hint">
+          オンにすると、1日だけ出勤してすぐ休むような飛び石の予定を避け、
+          数日まとめて出勤する形にしやすくなります。
+        </p>
       </section>
 
       <p id="formError" class="form-error" hidden></p>
