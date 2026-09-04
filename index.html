@@ -51,7 +51,10 @@
 
       <section class="card">
         <h2 class="card-title">絶対条件</h2>
-        <p class="card-lead">必ず守りたい条件です。</p>
+        <p class="card-lead">
+          設定した項目は必ず守って生成します。空欄・未選択の項目は
+          「制限なし」として扱われます。
+        </p>
 
         <div class="field-row">
           <div class="field">
@@ -80,6 +83,15 @@
           <label>絶対に休みたい日</label>
           <p class="field-hint">カレンダーの日付をタップして選んでください。</p>
           <div id="absoluteOffCalendar" class="mini-calendar"></div>
+        </div>
+
+        <div class="field">
+          <label>すでに出勤した日（任意）</label>
+          <p class="field-hint">
+            月の途中から生成する場合など、すでに出勤済みの日をタップしておくと、
+            その日は出勤のまま固定されます。
+          </p>
+          <div id="absoluteWorkCalendar" class="mini-calendar"></div>
         </div>
       </section>
 
