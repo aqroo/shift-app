@@ -1,5 +1,5 @@
 /* ==========================================================================
-   デザイントークン
+   デザイントークン(ライトテーマ・デフォルト)
    ========================================================================== */
 :root {
   --paper: #F7F5F0;
@@ -8,16 +8,76 @@
   --ink: #26243A;
   --ink-soft: #6B6980;
   --ink-faint: #A6A3B5;
+
+  /* ボタンや選択状態などの「濃い塗り」用(テーマ反転時に--inkとは
+     別の理屈で反転させる必要があるため、意図的に切り分けている) */
+  --fill-strong: #26243A;
+  --fill-strong-active: #16152A;
+  --fill-strong-text: #FFFFFF;
+
+  --warn-bg: #FBEFE0;
+  --warn-border: #E9CFA0;
+  --warn-text: #7A5A1E;
+  --warn: #B08D3E;
+
   --accent: #3E7C74;
   --accent-ink: #FFFFFF;
   --accent-soft: rgba(62, 124, 116, 0.12);
-  --warn: #B08D3E;
+
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-pill: 999px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ---- ダークテーマ ---- */
+:root[data-theme="dark"] {
+  --paper: #1C1B26;
+  --paper-raised: #262536;
+  --line: #38364A;
+  --ink: #EDEBF3;
+  --ink-soft: #A6A3B5;
+  --ink-faint: #6B6980;
+
+  --fill-strong: #EDEBF3;
+  --fill-strong-active: #FFFFFF;
+  --fill-strong-text: #1C1B26;
+
+  --warn-bg: #3D2F1A;
+  --warn-border: #5C4726;
+  --warn-text: #E8C98A;
+  --warn: #D9AE55;
+
+  --accent-ink: #14140F;
+}
+
+/* ---- アクセントカラー ---- */
+:root[data-accent="teal"] {
+  --accent: #3E7C74;
+  --accent-soft: rgba(62, 124, 116, 0.12);
+}
+:root[data-accent="indigo"] {
+  --accent: #4552C4;
+  --accent-soft: rgba(69, 82, 196, 0.12);
+}
+:root[data-accent="amber"] {
+  --accent: #96661E;
+  --accent-soft: rgba(150, 102, 30, 0.14);
+}
+:root[data-accent="plum"] {
+  --accent: #7A3F5C;
+  --accent-soft: rgba(122, 63, 92, 0.14);
+}
+:root[data-accent="forest"] {
+  --accent: #3F6B42;
+  --accent-soft: rgba(63, 107, 66, 0.14);
+}
+:root[data-theme="dark"][data-accent="teal"] { --accent-soft: rgba(62, 124, 116, 0.28); }
+:root[data-theme="dark"][data-accent="indigo"] { --accent-soft: rgba(96, 108, 220, 0.28); --accent: #6C7AE0; }
+:root[data-theme="dark"][data-accent="amber"] { --accent-soft: rgba(197, 143, 61, 0.28); --accent: #C58F3D; }
+:root[data-theme="dark"][data-accent="plum"] { --accent-soft: rgba(179, 105, 143, 0.28); --accent: #B3698F; }
+:root[data-theme="dark"][data-accent="forest"] { --accent-soft: rgba(103, 158, 107, 0.28); --accent: #679E6B; }
 
 * { box-sizing: border-box; }
 
@@ -158,9 +218,9 @@ input:focus-visible {
 .field-toggle label { margin: 0; font-size: 0.92rem; color: var(--ink); font-weight: 600; }
 
 .form-error {
-  background: #FBEFE0;
-  border: 1px solid #E9CFA0;
-  color: #7A5A1E;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-text);
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
@@ -184,9 +244,9 @@ input:focus-visible {
   cursor: pointer;
 }
 .weekday-chip.is-active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
+  background: var(--fill-strong);
+  border-color: var(--fill-strong);
+  color: var(--fill-strong-text);
 }
 .weekday-chip:disabled {
   opacity: 0.35;
@@ -247,17 +307,19 @@ input:focus-visible {
 }
 .cal-cell.is-empty { border: none; background: transparent; cursor: default; }
 
-/* 「絶対に休む日」選択用カレンダー */
-.cal-cell.is-selected {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
+/* 休み・出勤日の指定カレンダー(1つのカレンダーで両方を色分け表示) */
+.cal-cell.is-pick-off {
+  background: var(--fill-strong);
+  border-color: var(--fill-strong);
+  color: var(--fill-strong-text);
   font-weight: 700;
 }
 
-.cal-cell--work-pick.is-selected {
+.cal-cell.is-pick-work {
   background: var(--accent);
   border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
 }
 
 /* 結果カレンダー */
@@ -323,8 +385,8 @@ input:focus-visible {
   cursor: pointer;
   text-align: center;
 }
-.btn-primary { background: var(--ink); color: #fff; }
-.btn-primary:active { background: #16152233; }
+.btn-primary { background: var(--fill-strong); color: var(--fill-strong-text); }
+.btn-primary:active { background: var(--fill-strong-active); }
 .btn-secondary { background: var(--accent-soft); color: var(--accent); }
 .btn-ghost { background: transparent; color: var(--ink-soft); }
 .btn-block { width: 100%; }
@@ -476,3 +538,184 @@ input:focus-visible {
 }
 .sheet-date { margin: 0; font-size: 1.05rem; font-weight: 800; }
 .sheet-note { margin: 0 0 4px; font-size: 0.85rem; color: var(--ink-soft); }
+
+/* ==========================================================================
+   セグメントコントロール(休み/出勤の切り替え、テーマ切り替えなど)
+   ========================================================================== */
+.calendar-mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.calendar-mode-header label { margin: 0; }
+
+.segmented {
+  display: inline-flex;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 2px;
+  gap: 2px;
+}
+.segmented--full { display: flex; width: 100%; }
+.segmented-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.segmented--full .segmented-btn { flex: 1; text-align: center; }
+.segmented-btn.is-active {
+  background: var(--fill-strong);
+  color: var(--fill-strong-text);
+}
+
+/* ==========================================================================
+   詳細設定(details/summary)
+   ========================================================================== */
+.details-block {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.details-block summary {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.details-block summary::-webkit-details-marker { display: none; }
+.details-block summary::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 0.7rem;
+  transition: transform 0.15s ease;
+}
+.details-block[open] summary::before { transform: rotate(90deg); }
+.details-block[open] summary { margin-bottom: 12px; }
+
+/* ==========================================================================
+   戻るリンク(履歴・設定ビュー)
+   ========================================================================== */
+.back-link {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 6px 2px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+/* ==========================================================================
+   アクセントカラー選択ドット
+   ========================================================================== */
+.accent-dots {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.accent-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+}
+.accent-dot.is-active {
+  border-color: var(--ink);
+}
+.accent-dot.is-active::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+
+/* ==========================================================================
+   バージョン・更新履歴
+   ========================================================================== */
+.version-current {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin: 0 0 14px;
+}
+.changelog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.changelog-entry {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.changelog-entry:first-child { border-top: none; padding-top: 0; }
+.changelog-version {
+  font-weight: 800;
+  font-size: 0.92rem;
+}
+.changelog-date {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  margin-left: 6px;
+  font-weight: 500;
+}
+.changelog-entry ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.changelog-entry li { margin-bottom: 3px; }
+
+/* ==========================================================================
+   プロフィール一覧(履歴リストのスタイルを流用しつつボタンを追加)
+   ========================================================================== */
+.history-item {
+  gap: 10px;
+}
+.history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.icon-btn-sm {
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1rem;
+  -webkit-appearance: none;
+  appearance: none;
+}
