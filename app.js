@@ -165,6 +165,11 @@
     const maxWorkDays = maxRaw ? Number(maxRaw) : daysInMonth;
     const maxConsecutiveWorkDays = maxConsecutiveRaw ? Number(maxConsecutiveRaw) : daysInMonth;
 
+    const confirmedThroughRaw = $("inputConfirmedThroughDay").value;
+    const confirmedThroughDate = (confirmedThroughRaw && ym)
+      ? { year: ym.year, month: ym.month, day: Number(confirmedThroughRaw) }
+      : null;
+
     return {
       year: ym ? ym.year : null,
       month: ym ? ym.month : null,
@@ -174,6 +179,7 @@
       minWorkDays,
       maxWorkDays,
       maxConsecutiveWorkDays,
+      confirmedThroughDate,
       absoluteOffDates: new Set(state.formAbsoluteOff),
       absoluteWorkDates: new Set(state.formAbsoluteWork),
       fixedOffWeekdays: new Set(state.formFixedOff),
@@ -201,6 +207,7 @@
     $("inputMaxDays").value = cond.maxWorkDays;
     $("inputMaxConsecutive").value = cond.maxConsecutiveWorkDays;
     $("inputTargetSalary").value = cond.targetSalary || "";
+    $("inputConfirmedThroughDay").value = cond.confirmedThroughDate ? cond.confirmedThroughDate.day : "";
     $("inputRenkyu").setAttribute("aria-checked", cond.wantRenkyu ? "true" : "false");
 
     state.formAbsoluteOff = new Set(cond.absoluteOffDates);
@@ -355,8 +362,8 @@
       note.textContent = "この日は「すでに出勤した日」として固定されています。";
       toggleBtn.hidden = true;
     } else if (day.forcedOff) {
-      note.textContent = day.pastUnworked
-        ? "この日はすでに過ぎており、「すでに出勤した日」に選ばれていないため、休みだったものとして扱っています。出勤していた場合は、条件を編集して「すでに出勤した日」から選び直してください。"
+      note.textContent = day.autoOffLocked
+        ? "この日は確定済みの期間内で、「すでに出勤した日」に選ばれていないため、休みとして扱っています。実際に出勤する予定がある場合は、条件を編集して「すでに出勤した日」から選び直してください。"
         : "この日は「絶対に休みたい日」または「毎週の固定休」として設定されています。";
       toggleBtn.hidden = true;
     } else {
