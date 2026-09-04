@@ -55,27 +55,29 @@
 
         <div class="field-row">
           <div class="field">
-            <label for="inputMinDays">最低出勤日数</label>
-            <input type="number" id="inputMinDays" inputmode="numeric" min="0" step="1" placeholder="10" required>
+            <label for="inputMinDays">最低出勤日数（任意）</label>
+            <input type="number" id="inputMinDays" inputmode="numeric" min="0" step="1" placeholder="10">
           </div>
           <div class="field">
-            <label for="inputMaxDays">上限日数</label>
-            <input type="number" id="inputMaxDays" inputmode="numeric" min="0" step="1" placeholder="12" required>
+            <label for="inputMaxDays">上限日数（任意）</label>
+            <input type="number" id="inputMaxDays" inputmode="numeric" min="0" step="1" placeholder="12">
           </div>
         </div>
+        <p class="field-hint">空欄の場合、日数の制限なしとして生成します。</p>
 
         <div class="field">
-          <label for="inputMaxConsecutive">最大連勤日数</label>
-          <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3" required>
+          <label for="inputMaxConsecutive">最大連勤日数（任意）</label>
+          <input type="number" id="inputMaxConsecutive" inputmode="numeric" min="1" step="1" placeholder="3">
         </div>
+        <p class="field-hint">空欄の場合、連勤日数の制限なしとして生成します。</p>
 
         <div class="field">
-          <label>毎週の固定休</label>
+          <label>毎週の固定休（任意）</label>
           <div id="fixedOffWeekdays" class="weekday-chips"></div>
         </div>
 
         <div class="field">
-          <label>絶対に休む日</label>
+          <label>絶対に休みたい日</label>
           <p class="field-hint">カレンダーの日付をタップして選んでください。</p>
           <div id="absoluteOffCalendar" class="mini-calendar"></div>
         </div>
@@ -83,7 +85,7 @@
 
       <section class="card">
         <h2 class="card-title">希望条件</h2>
-        <p class="card-lead">できるだけ叶えたい条件です。</p>
+        <p class="card-lead">できるだけ叶えたい条件です（任意）。</p>
 
         <div class="field">
           <label for="inputTargetSalary">月給目標（円・任意）</label>
