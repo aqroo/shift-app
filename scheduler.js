@@ -73,7 +73,21 @@ function buildDays(cond) {
 
 // ---- 事前の実現可能性チェック ------------------------------------------
 
-function checkFeasibility(cond) {
+function normalizeCond(cond) {
+  // 最低/上限/連勤上限が未入力(null)の場合のみ、その月の日数を使って
+  // 内部的に「制限なし」相当の値へ解決する。呼び出し元のcondオブジェクト
+  // 自体は書き換えない(nullのまま保持し、UI側の表示に影響しないようにする)。
+  const n = daysInMonth(cond.year, cond.month);
+  return {
+    ...cond,
+    minWorkDays: cond.minWorkDays == null ? 0 : cond.minWorkDays,
+    maxWorkDays: cond.maxWorkDays == null ? n : cond.maxWorkDays,
+    maxConsecutiveWorkDays: cond.maxConsecutiveWorkDays == null ? n : cond.maxConsecutiveWorkDays,
+  };
+}
+
+function checkFeasibility(rawCond) {
+  const cond = normalizeCond(rawCond);
   if (cond.minWorkDays > cond.maxWorkDays) {
     return { feasible: false, reason: "希望出勤日数の下限が上限を超えています。" };
   }
@@ -431,16 +445,17 @@ function scheduleKey(schedule) {
  * メイン関数。条件を渡すと、最良のスケジュールと、
  * 別候補(異なるパターンの上位いくつか)を返す。
  */
-function generateSchedules(cond, options = {}) {
+function generateSchedules(rawCond, options = {}) {
   const nCandidates = options.nCandidates ?? 2500;
   const nAlternatives = options.nAlternatives ?? 3;
   const rng = makeRng(options.seed);
 
-  const feasibility = checkFeasibility(cond);
+  const feasibility = checkFeasibility(rawCond);
   if (!feasibility.feasible) {
     return { feasible: false, reason: feasibility.reason };
   }
 
+  const cond = normalizeCond(rawCond);
   const days = buildDays(cond);
   const tDays = targetWorkDays(cond);
 
