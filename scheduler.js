@@ -204,6 +204,20 @@ function generateCandidate(cond, days, targetDays, rng) {
       baseProb *= 0.45;
     }
 
+    // 「出勤はまとめたい」設定時: 直前と同じ状態(出勤 or 休み)を
+    // 続けやすくすることで、1〜2日おきに出勤/休みが入れ替わる
+    // 落ち着かないパターンを避け、まとまった出勤ブロックを作りやすくする。
+    if (cond.minWorkBlock && cond.minWorkBlock > 1 && i > 0) {
+      const prevDay = days[i - 1];
+      if (!prevDay.forcedOff) {
+        if (schedule[i - 1] === true) {
+          baseProb = Math.min(1, baseProb + 0.4);
+        } else if (schedule[i - 1] === false) {
+          baseProb = Math.max(0, baseProb - 0.3);
+        }
+      }
+    }
+
     let work;
     if (consecutive >= cond.maxConsecutiveWorkDays) {
       work = false;
@@ -295,6 +309,21 @@ function offBlocks(schedule) {
   return blocks;
 }
 
+function workBlocks(schedule) {
+  const blocks = [];
+  let cur = 0;
+  for (const w of schedule) {
+    if (w) {
+      cur++;
+    } else {
+      if (cur > 0) blocks.push(cur);
+      cur = 0;
+    }
+  }
+  if (cur > 0) blocks.push(cur);
+  return blocks;
+}
+
 function scoreSchedule(cond, days, schedule, targetDays) {
   const workDays = schedule.filter(Boolean).length;
   const estSalary = workDays * cond.hoursPerDay * cond.hourlyWage;
@@ -322,6 +351,19 @@ function scoreSchedule(cond, days, schedule, targetDays) {
   if (cond.wantRenkyu) {
     s += Math.min(longBlocks.length * 6, 18);
     if (blocks.length) s += Math.min(Math.max(...blocks) * 1.5, 9);
+  }
+
+  // 「出勤はまとめたい」設定: 短い出勤ブロック(孤立した1〜数日の出勤)を
+  // 避け、まとまった連勤ブロックを作ることを評価に加える。
+  if (cond.minWorkBlock && cond.minWorkBlock > 1) {
+    const wBlocks = workBlocks(schedule);
+    for (const b of wBlocks) {
+      if (b < cond.minWorkBlock) {
+        s -= (cond.minWorkBlock - b) * 10; // 目標より短いブロックほど大きく減点
+      } else {
+        s += 4; // 目標を満たすブロックには少しボーナス
+      }
+    }
   }
 
   return { score: s, estSalary, workDays, blocks };
